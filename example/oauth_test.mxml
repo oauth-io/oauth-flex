@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Application xmlns:fx="http://ns.adobe.com/mxml/2009" 
+			   xmlns:s="library://ns.adobe.com/flex/spark" applicationDPI="160">
+	
+	<fx:Script>
+		<![CDATA[
+			import io.oauth.OAuth;
+			import io.oauth.OAuthEvent;
+
+			private function button1_clickHandler(event:MouseEvent):void
+			{
+				console.text = "okay";
+				
+				var oauth : OAuth = new OAuth("VeQmyEu0QtzIOO9WjM1IlAU0ty4");
+				oauth.addEventListener(OAuthEvent.ERROR, function(event:OAuthEvent):void {
+					console.text = event.error + " error: " + event.errorMessage;
+				});
+				oauth.addEventListener(OAuthEvent.TOKEN, function(event:OAuthEvent):void {
+					console.text = "token -> " + event.accessToken;
+				});
+				oauth.popup("facebook", {authorize:{display:"touch"}});
+			}
+		]]>
+	</fx:Script>
+	
+	<s:layout>
+		<s:BasicLayout />
+	</s:layout>
+
+	<s:Button click="button1_clickHandler(event)" horizontalCenter="0" verticalCenter="0">Connect</s:Button>
+	<s:Label id="console" horizontalCenter="0" width="100%" />
+</s:Application>
