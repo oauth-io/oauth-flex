@@ -1,32 +1,103 @@
 <?xml version="1.0" encoding="utf-8"?>
 <s:Application xmlns:fx="http://ns.adobe.com/mxml/2009" 
-			   xmlns:s="library://ns.adobe.com/flex/spark" applicationDPI="160">
+			   xmlns:s="library://ns.adobe.com/flex/spark" applicationDPI="160"
+			   xmlns:oauth="io.oauth.*"
+			   creationComplete="creationCompleteHandler(event)">
 	
 	<fx:Script>
 		<![CDATA[
 			import io.oauth.OAuth;
 			import io.oauth.OAuthEvent;
-
-			private function button1_clickHandler(event:MouseEvent):void
+			import io.oauth.OAuthPopup;
+			
+			import mx.events.FlexEvent;
+			import mx.rpc.events.FaultEvent;
+			import mx.rpc.events.ResultEvent;
+			
+			// Create the OAuth object and initialize it with our public key
+			private var oauth : OAuth = new OAuth("VeQmyEu0QtzIOO9WjM1IlAU0ty4");
+			
+			
+			// Twitter connect button
+			private function tw_connect_clickHandler(event:MouseEvent):void
 			{
-				console.text = "okay";
-				
-				var oauth : OAuth = new OAuth("VeQmyEu0QtzIOO9WjM1IlAU0ty4");
+				var twpopup:OAuthPopup = oauth.popup("twitter");
+				twpopup.addEventListener(OAuthEvent.TOKEN, function(event:OAuthEvent):void {
+					trace("twitter token -> " + event.oauth_token);
+					trace("twitter token secret -> " + event.oauth_token_secret);
+					
+					// API request - Method 1: with OAuthEvent.http() 
+					var req:OAuthHTTPService = event.http();
+					req.url = '/1.1/account/verify_credentials.json';
+					req.resultFormat = 'json';
+					req.addEventListener(FaultEvent.FAULT, faultHandler);
+					req.addEventListener(ResultEvent.RESULT, function tw_resultHandler(event:ResultEvent):void {
+						result.text = "From twitter, hello " + event.result.name;
+					});
+					req.send();
+				});
+			}
+			
+			
+			// Facebook connect button
+			[Bindable] private var fb_auth:OAuthEvent = null; // keep authorization informations
+			private function fb_connect_clickHandler(event:MouseEvent):void
+			{
+				var fbpopup:OAuthPopup = oauth.popup("facebook", {authorize:{display:"touch"}});
+				fbpopup.addEventListener(OAuthEvent.TOKEN, function(event:OAuthEvent):void {
+					trace("facebook token -> " + event.access_token);
+					
+					// API request - Method 2: with an OAuthHTTPService in mxml
+					fb_auth = event;
+					fb_me.send();
+				});
+			}
+			protected function fb_resultHandler(event:ResultEvent):void
+			{
+				result.text = "From facebook, hello " + event.result.name;
+			}
+			
+			
+			// A generic api call error handler
+			protected function faultHandler(event:FaultEvent):void
+			{
+				trace('api request fail', event);
+			}
+			protected function creationCompleteHandler(event:FlexEvent):void
+			{
+				// A generic auth error handler
 				oauth.addEventListener(OAuthEvent.ERROR, function(event:OAuthEvent):void {
-					console.text = event.error + " error: " + event.errorMessage;
+					result.text = "(" + event.provider + ") " + event.error + " error: " + event.errorMessage;
 				});
-				oauth.addEventListener(OAuthEvent.TOKEN, function(event:OAuthEvent):void {
-					console.text = "token -> " + event.accessToken;
-				});
-				oauth.popup("facebook", {authorize:{display:"touch"}});
 			}
 		]]>
 	</fx:Script>
 	
-	<s:layout>
-		<s:BasicLayout />
-	</s:layout>
-
-	<s:Button click="button1_clickHandler(event)" horizontalCenter="0" verticalCenter="0">Connect</s:Button>
-	<s:Label id="console" horizontalCenter="0" width="100%" />
+	<fx:Declarations>
+		<oauth:OAuthHTTPService
+			id="fb_me" from="{fb_auth}" url="/me" resultFormat="json"
+			result="fb_resultHandler(event)"
+			fault="faultHandler(event)" />
+	</fx:Declarations>
+	
+	<!-- for the fun, background gradient -->
+	<s:Rect left="0" top="0" right="0" bottom="0">
+		<s:fill>
+			<s:LinearGradient id="_bgcolor" rotation="90">
+				<s:GradientEntry color="0x333333" alpha="0.55" />
+				<s:GradientEntry color="0x999999" alpha="0.2475" />
+			</s:LinearGradient>
+		</s:fill>
+	</s:Rect>
+	
+	
+	<s:Group left="0" right="0" top="0" bottom="0">
+		<s:layout>
+			<s:VerticalLayout horizontalAlign="center" />
+		</s:layout>
+		
+		<s:Label id="result" height="40%" />
+		<s:Button click="fb_connect_clickHandler(event)">Facebook - connect</s:Button>
+		<s:Button click="tw_connect_clickHandler(event)">Twitter - connect</s:Button>
+	</s:Group>
 </s:Application>

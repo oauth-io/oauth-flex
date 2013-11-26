@@ -20,13 +20,7 @@ Then, you can reference this library in your project or add it in your library p
 
 ### Usage
 
-The usage is basically the same than the web [javascript API](https://oauth.io/docs/api), but there are still some differences:
-
-1. There is only the popup mode, as mobiles don't distinct redirection/popup.
-
-2. Instead of sending callbacks in methods, we use the ActionScript coding style using classes & events. The `OAuth` object herits from `EventDispatcher` and can dispatch `OAuthEvent` objects, with types `OAuthEvent.TOKEN` and `OAuthEvent.ERROR`
-
-In your Javascript, add this line to initialize OAuth:
+In your code, add this line to initialize an OAuth object:
 
 	var oauth:OAuth = new OAuth("Public key");
 
@@ -41,9 +35,80 @@ oauth.addEventListener(OAuthEvent.TOKEN, function(event:OAuthEvent):void {
 });
 oauth.popup("facebook");
  ```
+ 
+ If you listen for more than one provider, you may want to check `event.provider` that contains the provider's name. Moreover, `OAuth.popup` returns a `OAuthPopup` object which also dispatch the `OAuthEvent` specifically for this authorization:
+ 
+ ```javascript
+var fb_popup:OAuthPopup = oauth.popup("facebook");
+fb_popup.addEventListener(OAuthEvent.ERROR, function(event:OAuthEvent):void {
+	trace(event.error + " error:" + event.errorMessage);
+});
+fb_popup.addEventListener(OAuthEvent.TOKEN, function(event:OAuthEvent):void {
+	trace("token " + event.accessToken + ", expires " + event.expires);
+});
+ ```
 
+
+#### API Calls
+
+You can also directly call APIs with the `OAuthHTTPService` class that wraps the default `HTTPService`. As the original one, you have two way to do these calls: either passing by mxml, or using only actionscript.
+
+This class also add JSON encoding and decoding to the original `HTTPService` so you can set resultFormat to "json" and contentType to "application/json" if needed. 
+
+ - Using MXML:
+
+In `fx:Declarations` bloc, create your `OAuthHTTPService`:
+ ```xml
+<oauth:OAuthHTTPService
+    id="fb_me" from="{fb_auth}" url="/me" resultFormat="json"
+    result="resultHandler(event)"
+    fault="faultHandler(event)" />
+ ```
+ 
+ To send the request:
+ ```javascript
+[Bindable] private var fb_auth:OAuthEvent = null;
+oauth.addEventListener(OAuthEvent.TOKEN, function(event:OAuthEvent):void {
+    fb_auth = event;
+    fb_me.send();
+});
+oauth.popup("facebook", {authorize:{display:"touch"}});
+ ```
+
+ To handle the response:
+ ```javascript
+private function resultHandler(event:ResultEvent):void
+{
+    trace("From facebook, hello " + event.result.name);
+}
+private function faultHandler(event:FaultEvent):void
+{
+    trace('api request fail', event);
+} 
+ ```
+
+ You can note the `from` property binded to the succeeded `OAuthEvent` which contains the tokens and description of the API calls authorization.
+
+
+ - Using ActionScript only:
+
+ ```javascript
+oauth.addEventListener(OAuthEvent.TOKEN, function(event:OAuthEvent):void {
+    var req:OAuthHTTPService = event.http(); // event.http() will create the OAuthHTTPService with from = event
+    req.url = '/1.1/account/verify_credentials.json';
+    req.resultFormat = 'json';
+    req.addEventListener(FaultEvent.FAULT, faultHandler);
+    req.addEventListener(ResultEvent.RESULT, function(event:ResultEvent):void {
+        trace("From twitter, hello " + event.result.name);
+    });
+    req.send();
+});
+oauth.popup("twitter");
+ ```
 
 ### Note
+
+For OAuth 1 API requests, the request is proxified via https://oauth.io to sign your request without exposing your secret key. The OAuth 2 API requests are direct since we pass the request's authorizing description beside the tokens.
 
 This library will try to access various URLs, so make sure to add
 

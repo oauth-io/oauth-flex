@@ -6,35 +6,84 @@ package io.oauth
 	import flash.events.LocationChangeEvent;
 	import flash.geom.Rectangle;
 	import flash.media.StageWebView;
-	
+
 	import mx.core.FlexGlobals;
-	
+
 	[Event(name="OAuthError", type="io.oauth.OAuthEvent")]
 	[Event(name="OAuthToken", type="io.oauth.OAuthEvent")]
 
+
+	/**
+	 * <p>The io.oauth.OAuth class it the main class from io.oauth:</p>
+	 *
+	 * <p>You can start an authorization process to a provider once
+	 * initialized with OAuth.popup</p>
+	 *
+	 * <p>To see the documentation of this library, please see
+	 * <a href="https://github.com/oauth-io/oauth-flex">https://github.com/oauth-io/oauth-flex</a></p>
+	 */
 	public class OAuth extends EventDispatcher
 	{
-		protected var oauthd_url:String = "https://oauth.io/auth";
+		/**
+		 *  OAuth daemon url to use. By default, this is set to <code>https://oauth.io</code>
+		 */
+		public var oauthd_url:String;
 
-		private var publicKey:String;		
+		public var publicKey:String;
 		private var clientStates:Array;
-		
+
 		private var webview:StageWebView;
-		
+
+		/**
+		 *  Create the OAuth object and initialize it to the public key passed in parameter.
+		 *
+		 *  @param publicKey The public key of oauthd / oauth.io to use
+		 */
 		public function OAuth(publicKey:String = null) {
 			this.publicKey = publicKey;
 			this.clientStates = new Array();
+			this.oauthd_url = "https://oauth.io";
 		}
-		
+
+		/**
+		 *  Set the oauthd public key to use.
+		 *
+		 *  @param publicKey The public key of oauthd / oauth.io to use
+		 */
 		public function initialize(publicKey:String) : void {
 			this.publicKey = publicKey;
-		} 
+		}
 
-		public function popup(provider:String, options:Object = null) : void {
+		/**
+		 *  Set the oauth daemon's url to use.
+		 *  By default, this uses https://oauth.io
+		 *
+		 *  @param url The daemon url to use
+		 */
+		public function setOAuthdURL(url:String) : void {
+			this.oauthd_url = url;
+		}
+
+		/**
+		 *  Opens a full screen webview and redirect it to the provider's authorization form.
+		 *  Once authorized/rejected, the OAuthEvent.TOKEN or OAuthEvent.ERROR event is dispatched.
+		 *
+		 *  @param provider The provider's name. e.g. facebook, google, twitter...
+		 *
+		 *  @param options The options can contain an <code>authorize</code> object with additional
+		 *  parameters for the authorization url.
+		 */
+		public function popup(provider:String, options:Object = null) : OAuthPopup {
+			var self:OAuth = this;
+			var _popup:OAuthPopup = new OAuthPopup();
+			var e:OAuthEvent;
+
 			if ( ! this.publicKey)
 			{
-				this.error("OAuth object must be initialized",provider);
-				return;
+				e = error("OAuth object must be initialized",provider);
+				this.dispatchEvent(e);
+				_popup.dispatchEvent(e);
+				return _popup;
 			}
 			if ( ! options)
 				options = new Object();
@@ -50,8 +99,8 @@ package io.oauth
 			options.state = "TODO";
 			options.state_type = "client";
 			this.clientStates.push(options.state);
-			
-			var url:String = this.oauthd_url + '/' + provider + "?k=" + this.publicKey;
+
+			var url:String = this.oauthd_url + "/auth/" + provider + "?k=" + this.publicKey;
 			url += '&redirect_uri=http%3A%2F%2Flocalhost';
 			url += "&opts=" + encodeURIComponent(JSON.stringify(options));
 
@@ -59,7 +108,7 @@ package io.oauth
 			this.webview.addEventListener(LocationChangeEvent.LOCATION_CHANGE, onLocationChange);
 			this.webview.addEventListener(ErrorEvent.ERROR, onWebviewError);
 			this.webview.loadURL(url);
-			
+
 			function onLocationChange(locationChangeEvent:LocationChangeEvent):void
 			{
 				var loc:String = locationChangeEvent.location;
@@ -71,32 +120,43 @@ package io.oauth
 				webview.dispose();
 				if (results && results[1]) {
 					var event:OAuthEvent = new OAuthEvent(OAuthEvent.TOKEN);
-					event.data = decodeURIComponent(results[1].replace(/\+/g, " "));
+					event.oauth = self;
+					event.parseData(decodeURIComponent(results[1].replace(/\+/g, " ")));
 					if (event.error) // todo: find a better way to retype event
 					{
-						error(event.errorMessage, provider, event.error);
+						e = error(event.errorMessage, provider, event.error);
+						dispatchEvent(e);
+						_popup.dispatchEvent(e);
 						return;
 					}
 					event.provider = provider;
 					dispatchEvent(event);
+					_popup.dispatchEvent(event);
 				}
-				else
-					error("unable to receive token", provider);
+				else {
+					e = error("unable to receive token", provider);
+					dispatchEvent(e);
+					_popup.dispatchEvent(e);
+				}
 			}
-			
+
 			function onWebviewError(event:ErrorEvent):void
 			{
-				error(event.toString(), provider, "StageWebView");
+				e = error(event.toString(), provider, "StageWebView");
+				this.dispatchEvent(e);
+				_popup.dispatchEvent(e);
 			}
+
+			return _popup;
 		}
-		
-		private function error(message:String, provider:String, error:String="unknown"):void
+
+		private function error(message:String, provider:String, error:String="unknown"):OAuthEvent
 		{
 			var event:OAuthEvent = new OAuthEvent(OAuthEvent.ERROR);
 			event.error = error;
 			event.errorMessage = message;
 			event.provider = provider;
-			this.dispatchEvent(event);
+			return event;
 		}
 	}
 }
